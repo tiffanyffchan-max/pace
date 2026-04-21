@@ -3,53 +3,31 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Pace 計錢 App (快捷入數版)</title>
+    <title>Pace 計錢 App (負數優化版)</title>
     <style>
         :root { --primary: #007aff; --danger: #ff3b30; --success: #34c759; }
-        body { 
-            font-family: -apple-system, sans-serif; 
-            background: #f0f2f5; 
-            margin: 0; 
-            padding: 10px; 
-            height: 100vh; 
-            display: flex; 
-            flex-direction: column; 
-            box-sizing: border-box;
-        }
-        
+        body { font-family: -apple-system, sans-serif; background: #f0f2f5; margin: 0; padding: 10px; height: 100vh; display: flex; flex-direction: column; box-sizing: border-box; }
         .config-section { background: white; border-radius: 12px; padding: 12px; margin-bottom: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); flex-shrink: 0; }
         .config-row { display: flex; gap: 10px; }
         label { font-size: 0.75em; color: #888; display: block; margin-bottom: 4px; }
         input { width: 100%; border: 1px solid #ddd; border-radius: 6px; padding: 8px; box-sizing: border-box; font-size: 16px; }
-        
-        .btn-add { background: var(--success); color: white; margin-bottom: 8px; flex-shrink: 0; width: 100%; }
-
-        .table-container { 
-            background: white; 
-            border-radius: 12px; 
-            flex-grow: 1; 
-            overflow: auto; 
-            box-shadow: 0 2px 4px rgba(0,0,0,0.05); 
-            border: 1px solid #eee;
-        }
-        
-        table { width: 100%; border-collapse: collapse; min-width: 500px; }
-        
+        .btn-add { background: var(--success); color: white; margin-bottom: 8px; flex-shrink: 0; width: 100%; height: 44px; }
+        .table-container { background: white; border-radius: 12px; flex-grow: 1; overflow: auto; box-shadow: 0 2px 4px rgba(0,0,0,0.05); border: 1px solid #eee; }
+        table { width: 100%; border-collapse: collapse; min-width: 550px; }
         thead { position: sticky; top: 0; z-index: 100; background: white; }
         .header-names { background: #f8f8f8; }
-        .header-total { background: #fffbe6; color: #856404; font-size: 0.9em; }
-        .header-money { background: #fffbe6; border-bottom: 2px solid #eee; }
-
+        .header-total, .header-money { background: #fffbe6; font-weight: bold; }
         th, td { padding: 8px 4px; border-bottom: 1px solid #eee; text-align: center; }
-        .player-name { border: none; font-weight: bold; text-align: center; background: #eee; width: 70px; padding: 4px; border-radius: 4px; font-size: 14px; }
+        .player-name { border: none; font-weight: bold; text-align: center; background: #eee; width: 65px; padding: 4px; border-radius: 4px; font-size: 13px; }
         
-        /* 數字鍵盤優化 */
-        .score-input { width: 55px; text-align: center; border: 1px solid #eee; padding: 10px 2px; border-radius: 4px; font-size: 18px; }
-        
-        .btn { border: none; border-radius: 8px; padding: 10px; cursor: pointer; font-weight: bold; font-size: 14px; }
+        /* 負數掣優化 */
+        .input-group { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+        .score-input { width: 50px; text-align: center; border: 1px solid #ddd; padding: 10px 0; border-radius: 4px; font-size: 18px; -webkit-appearance: none; }
+        .toggle-neg { background: #f0f0f0; border: 1px solid #ccc; border-radius: 4px; padding: 2px 8px; font-size: 12px; color: #555; font-weight: bold; }
+
+        .btn { border: none; border-radius: 8px; padding: 10px; cursor: pointer; font-weight: bold; }
         .footer-actions { padding-top: 10px; flex-shrink: 0; }
         .reset-btn { background: #8e8e93; color: white; width: 100%; padding: 10px; }
-
         .money-cell { font-size: 1.1em; font-weight: 900; }
         .pos { color: var(--success); }
         .neg { color: var(--danger); }
@@ -59,16 +37,9 @@
 
 <div class="config-section">
     <div class="config-row">
-        <div style="flex:1">
-            <label>每 Pace ($)</label>
-            <input type="number" id="pacePrice" value="0.25" step="0.01" oninput="saveAndCalc()">
-        </div>
-        <div style="flex:1">
-            <label>人數</label>
-            <div style="display:flex; gap:5px;">
-                <button class="btn" onclick="adjustPlayers(-1)" style="background:#ddd; flex:1">-</button>
-                <button class="btn" onclick="adjustPlayers(1)" style="background:#ddd; flex:1">+</button>
-            </div>
+        <div style="flex:1"><label>每 Pace ($)</label><input type="number" id="pacePrice" value="0.25" step="0.01" oninput="saveAndCalc()"></div>
+        <div style="flex:1"><label>人數</label>
+            <div style="display:flex; gap:5px;"><button class="btn" onclick="adjustPlayers(-1)" style="background:#ddd; flex:1">-</button><button class="btn" onclick="adjustPlayers(1)" style="background:#ddd; flex:1">+</button></div>
         </div>
     </div>
 </div>
@@ -76,7 +47,7 @@
 <button class="btn btn-add" onclick="addRound()">➕ 新增一局</button>
 
 <div class="table-container">
-    <table id="gameTable">
+    <table>
         <thead>
             <tr class="header-names" id="headerRow"></tr>
             <tr class="header-total" id="finalPacesRow"></tr>
@@ -86,9 +57,7 @@
     </table>
 </div>
 
-<div class="footer-actions">
-    <button class="btn reset-btn" onclick="resetGame()">🔄 全部重設 (清空所有資料)</button>
-</div>
+<div class="footer-actions"><button class="btn reset-btn" onclick="resetGame()">🔄 全部重設 (清空所有資料)</button></div>
 
 <script>
     let playerCount = 6;
@@ -96,7 +65,7 @@
     let rounds = Array.from({length: 20}, () => new Array(6).fill(0));
 
     function init() {
-        const savedData = localStorage.getItem('paceAppDataV6');
+        const savedData = localStorage.getItem('paceAppDataV7');
         if (savedData) {
             const data = JSON.parse(savedData);
             playerCount = data.playerCount || 6;
@@ -108,53 +77,49 @@
     }
 
     function saveToLocal() {
-        const dataToSave = { playerCount, playerNames, rounds, pacePrice: document.getElementById('pacePrice').value };
-        localStorage.setItem('paceAppDataV6', JSON.stringify(dataToSave));
+        localStorage.setItem('paceAppDataV7', JSON.stringify({ playerCount, playerNames, rounds, pacePrice: document.getElementById('pacePrice').value }));
     }
 
-    // 自動跳格邏輯
-    function handleKeyDown(e, rIndex, pIndex) {
+    // 正負轉換掣功能
+    function toggleSign(r, p) {
+        let val = rounds[r][p];
+        rounds[r][p] = val * -1;
+        renderTable();
+        saveToLocal();
+    }
+
+    function handleKeyDown(e, r, p) {
         if (e.key === 'Enter') {
             e.preventDefault();
-            const allInputs = document.querySelectorAll('.score-input');
-            const currentIndex = rIndex * playerCount + pIndex;
-            if (currentIndex + 1 < allInputs.length) {
-                allInputs[currentIndex + 1].focus();
-            } else {
-                addRound();
-                setTimeout(() => {
-                    const updatedInputs = document.querySelectorAll('.score-input');
-                    updatedInputs[currentIndex + 1].focus();
-                }, 100);
-            }
+            const inputs = document.querySelectorAll('.score-input');
+            const idx = r * playerCount + p;
+            if (inputs[idx + 1]) inputs[idx + 1].focus();
+            else { addRound(); setTimeout(() => document.querySelectorAll('.score-input')[idx+1].focus(), 100); }
         }
     }
 
     function renderTable() {
-        const headerRow = document.getElementById('headerRow');
-        const scoreBody = document.getElementById('scoreBody');
+        const hRow = document.getElementById('headerRow');
+        const sBody = document.getElementById('scoreBody');
         
-        headerRow.innerHTML = '<th>局</th>';
-        playerNames.forEach((name, i) => {
-            headerRow.innerHTML += `<th><input class="player-name" value="${name}" onchange="updateName(${i}, this.value)"></th>`;
-        });
-        headerRow.innerHTML += '<th></th>';
+        hRow.innerHTML = '<th>局</th>';
+        playerNames.forEach((n, i) => hRow.innerHTML += `<th><input class="player-name" value="${n}" onchange="updateName(${i}, this.value)"></th>`);
+        hRow.innerHTML += '<th></th>';
         
-        scoreBody.innerHTML = '';
-        rounds.forEach((round, rIndex) => {
-            let rowHtml = `<td>${rIndex + 1}</td>`;
-            round.forEach((score, pIndex) => {
-                // 加咗 inputmode="decimal" 呼喚九宮格
-                rowHtml += `<td><input type="number" 
-                                       inputmode="decimal" 
-                                       class="score-input" 
-                                       value="${score || ''}" 
-                                       placeholder="0" 
-                                       oninput="updateScore(${rIndex}, ${pIndex}, this.value)"
-                                       onkeydown="handleKeyDown(event, ${rIndex}, ${pIndex})"></td>`;
+        sBody.innerHTML = '';
+        rounds.forEach((round, r) => {
+            let rowHtml = `<td>${r + 1}</td>`;
+            round.forEach((score, p) => {
+                rowHtml += `<td>
+                    <div class="input-group">
+                        <input type="number" inputmode="decimal" class="score-input" value="${score || ''}" placeholder="0" 
+                            oninput="updateScore(${r}, ${p}, this.value)" onkeydown="handleKeyDown(event, ${r}, ${p})">
+                        <button class="toggle-neg" onclick="toggleSign(${r}, ${p})">+/-</button>
+                    </div>
+                </td>`;
             });
-            rowHtml += `<td><button style="border:none;background:none;color:red;font-weight:bold" onclick="delRound(${rIndex})">✕</button></td>`;
-            scoreBody.innerHTML += `<tr>${rowHtml}</tr>`;
+            rowHtml += `<td><button style="border:none;background:none;color:red;font-weight:bold" onclick="delRound(${r})">✕</button></td>`;
+            sBody.innerHTML += `<tr>${rowHtml}</tr>`;
         });
         calcAll();
     }
@@ -162,64 +127,34 @@
     function updateName(i, v) { playerNames[i] = v; saveAndCalc(); }
     function updateScore(r, p, v) { rounds[r][p] = parseFloat(v) || 0; saveAndCalc(); }
     function saveAndCalc() { saveToLocal(); calcAll(); }
-    
-    function addRound() { 
-        rounds.push(new Array(playerCount).fill(0)); 
-        renderTable(); 
-        saveToLocal();
-    }
-
-    function delRound(i) { 
-        if(confirm("刪除第 " + (i+1) + " 局？")) {
-            rounds.splice(i, 1); 
-            renderTable();
-            saveToLocal();
-        }
-    }
-
-    function adjustPlayers(delta) {
-        let newCount = playerCount + delta;
-        if (newCount < 2 || newCount > 12) return;
-        if (delta > 0) { 
-            playerNames.push(`Player ${newCount}`); 
-            rounds.forEach(r => r.push(0)); 
-        } else { 
-            playerNames.pop(); 
-            rounds.forEach(r => r.pop()); 
-        }
-        playerCount = newCount;
-        renderTable();
-        saveToLocal();
+    function addRound() { rounds.push(new Array(playerCount).fill(0)); renderTable(); saveToLocal(); }
+    function delRound(i) { if(confirm("刪除？")) { rounds.splice(i, 1); renderTable(); saveToLocal(); } }
+    function adjustPlayers(d) {
+        let n = playerCount + d;
+        if (n < 2 || n > 12) return;
+        d > 0 ? (playerNames.push(`P${n}`), rounds.forEach(r => r.push(0))) : (playerNames.pop(), rounds.forEach(r => r.pop()));
+        playerCount = n; renderTable(); saveToLocal();
     }
 
     function calcAll() {
-        const paceRate = parseFloat(document.getElementById('pacePrice').value) || 0;
-        let totalPaces = new Array(playerCount).fill(0);
+        const rate = parseFloat(document.getElementById('pacePrice').value) || 0;
+        let paces = new Array(playerCount).fill(0);
         rounds.forEach(round => {
             let sum = round.reduce((a, b) => a + (b || 0), 0);
             if (sum !== 0 || round.some(s => s !== 0)) {
-                round.forEach((score, i) => {
-                    totalPaces[i] += (sum - (playerCount * (score || 0)));
-                });
+                round.forEach((score, i) => paces[i] += (sum - (playerCount * (score || 0))));
             }
         });
-
-        document.getElementById('finalPacesRow').innerHTML = '<td>Pace</td>' + totalPaces.map(p => `<td>${p}</td>`).join('') + '<td></td>';
+        document.getElementById('finalPacesRow').innerHTML = '<td>Pace</td>' + paces.map(p => `<td>${p}</td>`).join('') + '<td></td>';
         let mHtml = '<td>結算</td>';
-        totalPaces.forEach(p => {
-            let money = Math.round(p * paceRate);
+        paces.forEach(p => {
+            let money = Math.round(p * rate);
             mHtml += `<td class="money-cell ${money > 0 ? 'pos' : (money < 0 ? 'neg' : '')}">$${money}</td>`;
         });
         document.getElementById('finalMoneyRow').innerHTML = mHtml + '<td></td>';
     }
 
-    function resetGame() { 
-        if(confirm("確定永久清空所有數據？")) { 
-            localStorage.removeItem('paceAppDataV6');
-            location.reload();
-        } 
-    }
-
+    function resetGame() { if(confirm("重設？")) { localStorage.removeItem('paceAppDataV7'); location.reload(); } }
     init();
 </script>
 

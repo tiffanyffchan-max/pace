@@ -1,33 +1,189 @@
-// 核心修改：調整人數時，同步更新未填分數局數的人數限制
-function adjustPlayers(d) {
-    let n = playerCount + d;
-    if (n < 2 || n > 12) return;
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Pace 計錢 App (最終修正版)</title>
+    <style>
+        :root { --primary: #007aff; --danger: #ff3b30; --success: #34c759; }
+        body { font-family: -apple-system, sans-serif; background: #f0f2f5; margin: 0; padding: 10px; height: 100vh; display: flex; flex-direction: column; box-sizing: border-box; }
+        .config-section { background: white; border-radius: 12px; padding: 12px; margin-bottom: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); flex-shrink: 0; }
+        .config-row { display: flex; gap: 10px; }
+        label { font-size: 0.75em; color: #888; display: block; margin-bottom: 4px; }
+        input { width: 100%; border: 1px solid #ddd; border-radius: 6px; padding: 8px; box-sizing: border-box; font-size: 16px; }
+        .btn-add { background: var(--success); color: white; margin-bottom: 8px; flex-shrink: 0; width: 100%; height: 44px; font-weight: bold; border: none; border-radius: 8px; cursor: pointer; }
+        .table-container { background: white; border-radius: 12px; flex-grow: 1; overflow: auto; box-shadow: 0 2px 4px rgba(0,0,0,0.05); border: 1px solid #eee; }
+        table { width: 100%; border-collapse: collapse; min-width: 550px; }
+        thead { position: sticky; top: 0; z-index: 100; background: white; }
+        .header-names { background: #f8f8f8; }
+        .header-total, .header-money { background: #fffbe6; font-weight: bold; }
+        th, td { padding: 8px 4px; border-bottom: 1px solid #eee; text-align: center; }
+        .player-name { border: none; font-weight: bold; text-align: center; background: #eee; width: 65px; padding: 4px; border-radius: 4px; font-size: 13px; }
+        .input-group { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+        .score-input { width: 50px; text-align: center; border: 1px solid #ddd; padding: 10px 0; border-radius: 4px; font-size: 18px; }
+        .toggle-neg { background: #f0f0f0; border: 1px solid #ccc; border-radius: 4px; padding: 2px 8px; font-size: 11px; color: #555; cursor: pointer; }
+        .btn { border: none; border-radius: 8px; padding: 10px; cursor: pointer; font-weight: bold; }
+        .footer-actions { padding-top: 10px; flex-shrink: 0; }
+        .reset-btn { background: #8e8e93; color: white; width: 100%; padding: 10px; }
+        .money-cell { font-size: 1.1em; font-weight: 900; }
+        .pos { color: var(--success); }
+        .neg { color: var(--danger); }
+    </style>
+</head>
+<body>
 
-    if (d > 0) {
-        if (playerNames.length < n) playerNames.push(`P${n}`);
-        // 關鍵修改：當你增加人數，我會檢查所有「仲未入分」或者「最後一局」
-        // 等你可以喺加人後，即刻喺現有嘅局數入新加玩家嘅分
+<div class="config-section">
+    <div class="config-row">
+        <div style="flex:1"><label>每 Pace ($)</label><input type="number" id="pacePrice" value="0.25" step="0.01" oninput="saveAndCalc()"></div>
+        <div style="flex:1"><label>人數 (宜家幾人)</label>
+            <div style="display:flex; gap:5px;"><button class="btn" onclick="adjustPlayers(-1)" style="background:#ddd; flex:1">-</button><button class="btn" onclick="adjustPlayers(1)" style="background:#ddd; flex:1">+</button></div>
+        </div>
+    </div>
+</div>
+
+<button class="btn btn-add" onclick="addRound()">➕ 新增一局 (按當前人數)</button>
+
+<div class="table-container">
+    <table>
+        <thead>
+            <tr class="header-names" id="headerRow"></tr>
+            <tr class="header-total" id="finalPacesRow"></tr>
+            <tr class="header-money" id="finalMoneyRow"></tr>
+        </thead>
+        <tbody id="scoreBody"></tbody>
+    </table>
+</div>
+
+<div class="footer-actions"><button class="btn reset-btn" onclick="resetGame()">🔄 全部重設 (清空所有資料)</button></div>
+
+<script>
+    let playerCount = 6;
+    let playerNames = ["Player 1", "Player 2", "Player 3", "Player 4", "Player 5", "Player 6"];
+    let rounds = Array.from({length: 20}, () => ({ scores: new Array(12).fill(null), count: 6 }));
+
+    function init() {
+        const savedData = localStorage.getItem('paceAppDataV10');
+        if (savedData) {
+            const data = JSON.parse(savedData);
+            playerCount = data.playerCount || 6;
+            playerNames = data.playerNames || playerNames;
+            rounds = data.rounds || rounds;
+            document.getElementById('pacePrice').value = data.pacePrice || 0.25;
+        }
+        renderTable();
+    }
+
+    function saveToLocal() {
+        localStorage.setItem('paceAppDataV10', JSON.stringify({ playerCount, playerNames, rounds, pacePrice: document.getElementById('pacePrice').value }));
+    }
+
+    function toggleSign(r, p) {
+        if (rounds[r].scores[p] === null) return;
+        rounds[r].scores[p] = (rounds[r].scores[p] || 0) * -1;
+        renderTable();
+        saveAndCalc();
+    }
+
+    function renderTable() {
+        const hRow = document.getElementById('headerRow');
+        const sBody = document.getElementById('scoreBody');
+        hRow.innerHTML = '<th>局(人數)</th>';
+        playerNames.forEach((n, i) => hRow.innerHTML += `<th><input class="player-name" value="${n}" onchange="updateName(${i}, this.value)"></th>`);
+        hRow.innerHTML += '<th></th>';
+        
+        sBody.innerHTML = '';
+        rounds.forEach((round, r) => {
+            let rowHtml = `<td>${r + 1} (${round.count}人)</td>`;
+            playerNames.forEach((_, p) => {
+                let val = round.scores[p];
+                let isDisabled = p >= round.count; 
+                rowHtml += `<td>
+                    <div class="input-group">
+                        <input type="number" inputmode="decimal" class="score-input" 
+                            style="${isDisabled ? 'background:#f9f9f9; border-color:#eee; color:#ccc;' : ''}"
+                            value="${val === null ? '' : val}" 
+                            placeholder="${isDisabled ? '-' : '0'}"
+                            oninput="updateScore(${r}, ${p}, this.value)">
+                        ${!isDisabled ? `<button class="toggle-neg" onclick="toggleSign(${r}, ${p})">+/-</button>` : '<div style="height:21px"></div>'}
+                    </div>
+                </td>`;
+            });
+            rowHtml += `<td><button style="border:none;background:none;color:red;font-weight:bold" onclick="delRound(${r})">✕</button></td>`;
+            sBody.innerHTML += `<tr>${rowHtml}</tr>`;
+        });
+        calcAll();
+    }
+
+    function updateName(i, v) { playerNames[i] = v; saveToLocal(); }
+    
+    function updateScore(r, p, v) { 
+        // 核心修正：如果手動喺灰色格入分，自動解鎖嗰局人數
+        if (p >= rounds[r].count && v !== '') {
+            rounds[r].count = p + 1;
+        }
+        rounds[r].scores[p] = v === '' ? 0 : parseFloat(v); 
+        saveAndCalc(); 
+        if (p >= rounds[r].count - 1) renderTable(); // 重新渲染以更新灰色/白色狀態
+    }
+
+    function saveAndCalc() { saveToLocal(); calcAll(); }
+    
+    function addRound() { 
+        rounds.push({ scores: new Array(12).fill(null), count: playerCount }); 
+        renderTable(); 
+        saveToLocal(); 
+    }
+
+    function delRound(i) { if(confirm("確定刪除此局？")) { rounds.splice(i, 1); renderTable(); saveToLocal(); } }
+
+    function adjustPlayers(d) {
+        let n = playerCount + d;
+        if (n < 2 || n > 12) return;
+        if (d > 0) {
+            if (playerNames.length < n) playerNames.push(`P${n}`);
+            // 隨時加人時，自動將最後一局或空白局的人數上限提升
+            rounds.forEach((round, idx) => {
+                let isLastRound = idx === rounds.length - 1;
+                let isBlank = round.scores.every(s => s === null || s === 0);
+                if (isLastRound || isBlank) {
+                    round.count = n;
+                }
+            });
+        } else {
+            if (playerNames.length > n) playerNames.pop();
+        }
+        playerCount = n; 
+        renderTable(); 
+        saveToLocal();
+    }
+
+    function calcAll() {
+        const rate = parseFloat(document.getElementById('pacePrice').value) || 0;
+        let paces = new Array(playerNames.length).fill(0);
+
         rounds.forEach(round => {
-            let isBlank = round.scores.every(s => s === null || s === 0);
-            if (isBlank || round === rounds[rounds.length - 1]) {
-                round.count = n;
+            let currentScores = round.scores.slice(0, round.count).map(s => s || 0);
+            let sum = currentScores.reduce((a, b) => a + b, 0);
+            if (sum !== 0 || currentScores.some(s => s !== 0)) {
+                for (let i = 0; i < round.count; i++) {
+                    let pScore = round.scores[i] || 0;
+                    paces[i] += (sum - (round.count * pScore));
+                }
             }
         });
-    } else {
-        playerNames.pop();
-        // 減人就維持返原本 logic
-    }
-    playerCount = n; 
-    renderTable(); 
-    saveToLocal();
-}
 
-// 另外加多個「手動解鎖」功能：萬一仲係灰色，撳吓個格仔就會解鎖
-function updateScore(r, p, v) { 
-    // 如果手動入分，自動將嗰局人數提升到足以容納呢位玩家
-    if (p >= rounds[r].count) {
-        rounds[r].count = p + 1;
+        document.getElementById('finalPacesRow').innerHTML = '<td>Pace</td>' + paces.map(p => `<td>${p}</td>`).join('') + '<td></td>';
+        let mHtml = '<td>結算</td>';
+        paces.forEach(p => {
+            let money = Math.round(p * rate);
+            mHtml += `<td class="money-cell ${money > 0 ? 'pos' : (money < 0 ? 'neg' : '')}">$${money}</td>`;
+        });
+        document.getElementById('finalMoneyRow').innerHTML = mHtml + '<td></td>';
     }
-    rounds[r].scores[p] = v === '' ? 0 : parseFloat(v); 
-    saveAndCalc(); 
-}
+
+    function resetGame() { if(confirm("確定要重設所有數據嗎？")) { localStorage.clear(); location.reload(); } }
+    
+    init();
+</script>
+</body>
+</html>

@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Pace 計錢 App (負數優化版)</title>
+    <title>Pace 計錢 App (智能加人版)</title>
     <style>
         :root { --primary: #007aff; --danger: #ff3b30; --success: #34c759; }
         body { font-family: -apple-system, sans-serif; background: #f0f2f5; margin: 0; padding: 10px; height: 100vh; display: flex; flex-direction: column; box-sizing: border-box; }
@@ -19,12 +19,9 @@
         .header-total, .header-money { background: #fffbe6; font-weight: bold; }
         th, td { padding: 8px 4px; border-bottom: 1px solid #eee; text-align: center; }
         .player-name { border: none; font-weight: bold; text-align: center; background: #eee; width: 65px; padding: 4px; border-radius: 4px; font-size: 13px; }
-        
-        /* 負數掣優化 */
         .input-group { display: flex; flex-direction: column; align-items: center; gap: 2px; }
-        .score-input { width: 50px; text-align: center; border: 1px solid #ddd; padding: 10px 0; border-radius: 4px; font-size: 18px; -webkit-appearance: none; }
-        .toggle-neg { background: #f0f0f0; border: 1px solid #ccc; border-radius: 4px; padding: 2px 8px; font-size: 12px; color: #555; font-weight: bold; }
-
+        .score-input { width: 50px; text-align: center; border: 1px solid #ddd; padding: 10px 0; border-radius: 4px; font-size: 18px; }
+        .toggle-neg { background: #f0f0f0; border: 1px solid #ccc; border-radius: 4px; padding: 2px 8px; font-size: 11px; color: #555; }
         .btn { border: none; border-radius: 8px; padding: 10px; cursor: pointer; font-weight: bold; }
         .footer-actions { padding-top: 10px; flex-shrink: 0; }
         .reset-btn { background: #8e8e93; color: white; width: 100%; padding: 10px; }
@@ -65,7 +62,7 @@
     let rounds = Array.from({length: 20}, () => new Array(6).fill(0));
 
     function init() {
-        const savedData = localStorage.getItem('paceAppDataV7');
+        const savedData = localStorage.getItem('paceAppDataV8');
         if (savedData) {
             const data = JSON.parse(savedData);
             playerCount = data.playerCount || 6;
@@ -77,31 +74,18 @@
     }
 
     function saveToLocal() {
-        localStorage.setItem('paceAppDataV7', JSON.stringify({ playerCount, playerNames, rounds, pacePrice: document.getElementById('pacePrice').value }));
+        localStorage.setItem('paceAppDataV8', JSON.stringify({ playerCount, playerNames, rounds, pacePrice: document.getElementById('pacePrice').value }));
     }
 
-    // 正負轉換掣功能
     function toggleSign(r, p) {
-        let val = rounds[r][p];
-        rounds[r][p] = val * -1;
+        rounds[r][p] = (rounds[r][p] || 0) * -1;
         renderTable();
         saveToLocal();
-    }
-
-    function handleKeyDown(e, r, p) {
-        if (e.key === 'Enter') {
-            e.preventDefault();
-            const inputs = document.querySelectorAll('.score-input');
-            const idx = r * playerCount + p;
-            if (inputs[idx + 1]) inputs[idx + 1].focus();
-            else { addRound(); setTimeout(() => document.querySelectorAll('.score-input')[idx+1].focus(), 100); }
-        }
     }
 
     function renderTable() {
         const hRow = document.getElementById('headerRow');
         const sBody = document.getElementById('scoreBody');
-        
         hRow.innerHTML = '<th>局</th>';
         playerNames.forEach((n, i) => hRow.innerHTML += `<th><input class="player-name" value="${n}" onchange="updateName(${i}, this.value)"></th>`);
         hRow.innerHTML += '<th></th>';
@@ -112,28 +96,44 @@
             round.forEach((score, p) => {
                 rowHtml += `<td>
                     <div class="input-group">
-                        <input type="number" inputmode="decimal" class="score-input" value="${score || ''}" placeholder="0" 
-                            oninput="updateScore(${r}, ${p}, this.value)" onkeydown="handleKeyDown(event, ${r}, ${p})">
+                        <input type="number" inputmode="decimal" class="score-input" value="${score === 0 ? '0' : (score || '')}" 
+                            oninput="updateScore(${r}, ${p}, this.value)">
                         <button class="toggle-neg" onclick="toggleSign(${r}, ${p})">+/-</button>
                     </div>
                 </td>`;
             });
-            rowHtml += `<td><button style="border:none;background:none;color:red;font-weight:bold" onclick="delRound(${r})">✕</button></td>`;
+            rowHtml += `<td><button style="border:none;background:none;color:red" onclick="delRound(${r})">✕</button></td>`;
             sBody.innerHTML += `<tr>${rowHtml}</tr>`;
         });
         calcAll();
     }
 
-    function updateName(i, v) { playerNames[i] = v; saveAndCalc(); }
-    function updateScore(r, p, v) { rounds[r][p] = parseFloat(v) || 0; saveAndCalc(); }
+    function updateName(i, v) { playerNames[i] = v; saveToLocal(); }
+    function updateScore(r, p, v) { rounds[r][p] = v === '' ? 0 : parseFloat(v); saveAndCalc(); }
     function saveAndCalc() { saveToLocal(); calcAll(); }
     function addRound() { rounds.push(new Array(playerCount).fill(0)); renderTable(); saveToLocal(); }
     function delRound(i) { if(confirm("刪除？")) { rounds.splice(i, 1); renderTable(); saveToLocal(); } }
+
     function adjustPlayers(d) {
+        let prevCount = playerCount;
         let n = playerCount + d;
         if (n < 2 || n > 12) return;
-        d > 0 ? (playerNames.push(`P${n}`), rounds.forEach(r => r.push(0))) : (playerNames.pop(), rounds.forEach(r => r.pop()));
-        playerCount = n; renderTable(); saveToLocal();
+
+        if (d > 0) {
+            playerNames.push(`P${n}`);
+            rounds.forEach((round) => {
+                // 自動補平均分邏輯
+                let sum = round.reduce((a, b) => a + (b || 0), 0);
+                let avg = prevCount > 0 ? Math.round(sum / prevCount) : 0;
+                round.push(avg);
+            });
+        } else {
+            playerNames.pop();
+            rounds.forEach(r => r.pop());
+        }
+        playerCount = n; 
+        renderTable(); 
+        saveToLocal();
     }
 
     function calcAll() {
@@ -154,9 +154,8 @@
         document.getElementById('finalMoneyRow').innerHTML = mHtml + '<td></td>';
     }
 
-    function resetGame() { if(confirm("重設？")) { localStorage.removeItem('paceAppDataV7'); location.reload(); } }
+    function resetGame() { if(confirm("重設所有？")) { localStorage.removeItem('paceAppDataV8'); location.reload(); } }
     init();
 </script>
-
 </body>
 </html>
